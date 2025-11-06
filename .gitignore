@@ -33,6 +33,7 @@ sync*.sh
 
 # ALLOWED
 !bin/*
+!installers/*
 !Resources/*
 !Inno/*
 
