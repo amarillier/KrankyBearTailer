@@ -1,0 +1,16 @@
+[Details]
+ID = "com.github.amarillier.KrankyBearTailer"
+Name = "Kranky Bear Tailer"
+Creator = "Allan Marillier"
+Version = "0.1.0"
+Build = 1
+Icon = "Resources/Images/KrankyBearHogwartsSorting.png"
+
+[Migrations]
+  fyneDo = true
+
+[Development]
+  HelperText = "This binary was built with debug symbols"
+
+[Release]
+  HelperText = "This binary was built without debug symbols"
