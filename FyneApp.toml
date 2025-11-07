@@ -2,7 +2,7 @@
 ID = "com.github.amarillier.KrankyBearTailer"
 Name = "Kranky Bear Tailer"
 Creator = "Allan Marillier"
-Version = "0.1.0"
+Version = "0.1.1"
 Build = 1
 Icon = "Resources/Images/KrankyBearHogwartsSorting.png"
 

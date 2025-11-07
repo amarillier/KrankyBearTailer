@@ -35,8 +35,8 @@ sed -i '' "s/product_version\":.*/product_version\": \"$ver\"/" ./winres/winres.
 sed -i '' "s/FileVersion\":.*/FileVersion\": \"$ver\",/" ./winres/winres.json
 sed -i '' "s/ProductVersion\":.*/ProductVersion\": \"$ver\",/" ./winres/winres.json
 
-echo "No Info.plist updates"
-#sed -i '' "s/<string>v .*<\/string>/<string>v $ver<\/string>/" ./KrankyBearTailer.app/Contents/Info.plist
+echo "No direct Info.plist updates - updating Info-plist.txt which can be renamed if wanted"
+sed -i '' "s/<string>v .*<\/string>/<string>v $ver<\/string>/" ./Info-plist.txt
 
 #echo "mkAllZip.sh"
 #sed -i '' "s/version=\".*\"/version=\"$ver\"/" mkAllZip.sh
@@ -44,8 +44,11 @@ echo "No Info.plist updates"
 
 echo "Update LICENSE and ReleaseNotes.txt"
 cp LICENSE Resources
-cp ReleaseNotes.txt Resources
+cp ReleaseNotes.txt ./Resources
 cp LICENSE KrankyBearTailer.app/Contents/Resources
-cp ReleaseNotes.txt KrankyBearTailer.app/Contents/Resources
+cp ReleaseNotes.txt ./KrankyBearTailer.app/Contents/Resources
+
+echo "Update package.sh"
+sed -i '' "s/VERSION:-.*}/VERSION:-$ver}/" ./package.sh
 
 # "Now this is not the end. It is not even the beginning of the end. But it is, perhaps, the end of the beginning." Winston Churchill, November 10, 1942

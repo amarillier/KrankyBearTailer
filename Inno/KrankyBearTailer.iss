@@ -2,10 +2,10 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "KrankyBearTailer"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppPublisher "Allan Marillier, 2024-2025"
 #define MyAppURL "https://github.com/amarillier/KrankyBearTailer"
-#define MyAppExeName "KrankyBearTailer.exe"
+#define MyAppExeName "tailer-windows.exe"
 #define MyAppAssocName MyAppName + ""
 #define MyAppAssocExt ".exe"
 #define MyAppAssocKey StringChange(MyAppAssocName, " ", "") + MyAppAssocExt
@@ -35,7 +35,7 @@ LicenseFile=..\LICENSE
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\installers
-OutputBaseFilename=KrankyBearTailerSetup
+OutputBaseFilename=KrankyBearTailerSetup_{#MyAppVersion}
 SetupIconFile=..\Resources\Images\KrankyBearHogwartsSorting.ico
 Compression=lzma
 SolidCompression=yes

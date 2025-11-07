@@ -58,3 +58,4 @@ done
 - Only file tabs have close buttons (Welcome tab doesn't)
 - Closing should stop tailing and clean up resources
 
+## "Now this is not even the end. It is not even the beginning of the end. But it is, perhaps, the end of the beginning." Winston Churchill, November 10, 1942

@@ -8,7 +8,7 @@ echo ""
 mkdir -p bin
 
 # cleanup any existing binaries
-rm -f bin/*
+rm -f bin/tailer*
 
 # Check if Go is installed
 if ! command -v go &> /dev/null

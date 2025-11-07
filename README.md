@@ -4,9 +4,10 @@ A cross-platform GUI log tail application similar to BareTail, written in Go usi
 
 ## Features
 
-- 🚀 **Real-time File Tailing**: Follow log files with live updates
+- 🚀 **Real-time File Tailing**: Follow log files with live updates, start by displaying last 20 lines
 - 📑 **Multiple Tabs**: Open and monitor multiple log files simultaneously
 - 🎨 **Keyword Highlighting**: Highlight lines containing user-specified keywords
+- 📢 **Optional Audio Alert**: Alert with user selectable mp3 when a keyword match is detected
 - 🔍 **Case-Insensitive Search**: Flexible keyword matching
 - 💻 **Cross-Platform**: Compile for Windows, Linux, and macOS
 - 🎯 **File Rotation Support**: Automatically handles log file rotation
@@ -217,3 +218,4 @@ This project is provided as-is for educational and personal use.
 
 Feel free to fork, modify, and use this project as you see fit.
 
+## "Now this is not even the end. It is not even the beginning of the end. But it is, perhaps, the end of the beginning." Winston Churchill, November 10, 1942

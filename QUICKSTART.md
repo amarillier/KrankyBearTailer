@@ -87,3 +87,4 @@ echo "INFO: Application stopped" >> test.log
 - Each tab manages its own set of keywords
 - Scroll to bottom automatically follows new lines
 
+## "Now this is not even the end. It is not even the beginning of the end. But it is, perhaps, the end of the beginning." Winston Churchill, November 10, 1942

@@ -30,18 +30,79 @@ import (
 
 const (
 	appName    = "Kranky Bear Tailer"
-	appVersion = "0.1.0"
+	appVersion = "0.1.1"
 	appAuthor  = "Allan Marillier"
 )
 
 var appCopyright = "Copyright (c) Allan Marillier, 2024-" + strconv.Itoa(time.Now().Year())
+
+// ScrollableLines is a custom container that displays log lines without separators
+type ScrollableLines struct {
+	scroll *container.Scroll
+	vbox   *fyne.Container
+	items  []fyne.CanvasObject // Store references to line widgets
+}
+
+func (sl *ScrollableLines) Refresh() {
+	// Refresh all items in the VBox
+	if sl.vbox != nil {
+		sl.vbox.Refresh()
+	}
+	if sl.scroll != nil {
+		sl.scroll.Refresh()
+	}
+}
+
+// Refresh rebuilds the lines display - must be called from UI thread
+func (ft *FileTailer) refreshLines() {
+	ft.rebuildLines()
+	ft.lines.Refresh()
+}
+
+func (sl *ScrollableLines) ScrollToBottom() {
+	if sl.scroll != nil {
+		sl.scroll.ScrollToBottom()
+	}
+}
+
+// rebuildLines rebuilds the VBox content from the FileTailer's data
+func (ft *FileTailer) rebuildLines() {
+	ft.mutex.RLock()
+	data := make([]string, len(ft.data))
+	copy(data, ft.data)
+	highlightColors := make([]color.Color, len(ft.highlightColors))
+	copy(highlightColors, ft.highlightColors)
+	ft.mutex.RUnlock()
+
+	// Create widgets for each line
+	newItems := make([]fyne.CanvasObject, 0, len(data))
+	for i, line := range data {
+		label := widget.NewLabel(line)
+		label.Wrapping = fyne.TextWrapWord
+
+		var bgRect *canvas.Rectangle
+		if i < len(highlightColors) && highlightColors[i] != nil {
+			bgRect = canvas.NewRectangle(highlightColors[i])
+		} else {
+			bgRect = canvas.NewRectangle(color.Transparent)
+		}
+
+		lineContainer := container.NewStack(bgRect, label)
+		newItems = append(newItems, lineContainer)
+	}
+
+	// Replace the VBox content by creating a new VBox
+	ft.lines.items = newItems
+	ft.lines.vbox.Objects = newItems
+	ft.lines.vbox.Refresh()
+}
 
 type FileTailer struct {
 	filePath        string
 	file            *os.File
 	fileInfo        os.FileInfo
 	scanner         *bufio.Scanner
-	lines           *widget.List
+	lines           *ScrollableLines
 	data            []string
 	highlightColors []color.Color          // Color for each line (nil = not highlighted)
 	keywordColors   map[string]color.Color // Map keyword -> color
@@ -82,57 +143,14 @@ func NewFileTailer(filePath string) (*FileTailer, error) {
 		stopChan:        make(chan struct{}),
 	}
 
-	// Create widget list first
-	ft.lines = widget.NewList(
-		func() int {
-			ft.mutex.RLock()
-			defer ft.mutex.RUnlock()
-			return len(ft.data)
-		},
-		func() fyne.CanvasObject {
-			// Create a container with colored background and label
-			label := widget.NewLabel("")
-			label.Wrapping = fyne.TextWrapWord
-			bgRect := canvas.NewRectangle(color.Transparent)
-			bgRect.FillColor = color.Transparent
-			// Use Border container to layer background behind label
-			return container.NewBorder(nil, nil, nil, nil, container.NewStack(bgRect, label))
-		},
-		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			ft.mutex.RLock()
-			defer ft.mutex.RUnlock()
-
-			if id >= len(ft.data) {
-				return
-			}
-
-			// Extract the container structure
-			// obj is a Border container containing a Stack with background and label
-			border := obj.(*fyne.Container)
-			stack := border.Objects[0].(*fyne.Container)
-			bgRect := stack.Objects[0].(*canvas.Rectangle)
-			label := stack.Objects[1].(*widget.Label)
-
-			line := ft.data[id]
-			highlightColor := color.Color(nil)
-			if id < len(ft.highlightColors) {
-				highlightColor = ft.highlightColors[id]
-			}
-
-			label.SetText(line)
-
-			// Set background color for highlighted lines
-			if highlightColor != nil {
-				bgRect.FillColor = highlightColor
-				bgRect.Refresh()
-				label.Importance = widget.MediumImportance
-			} else {
-				bgRect.FillColor = color.Transparent
-				bgRect.Refresh()
-				label.Importance = widget.MediumImportance
-			}
-		},
-	)
+	// Create scrollable lines container (no separators between items)
+	vbox := container.NewVBox()
+	scroll := container.NewScroll(vbox)
+	ft.lines = &ScrollableLines{
+		scroll: scroll,
+		vbox:   vbox,
+		items:  []fyne.CanvasObject{},
+	}
 
 	return ft, nil
 }
@@ -355,7 +373,7 @@ func (ft *FileTailer) SetKeywords(keywords map[string]color.Color) {
 
 	// Refresh the widget to show the updated highlighting - must be on main thread
 	fyne.Do(func() {
-		ft.lines.Refresh()
+		ft.refreshLines()
 	})
 }
 
@@ -486,7 +504,7 @@ func (ft *FileTailer) StartTail() {
 					// Refresh UI - use fyne.Do for thread safety
 					if len(newLines) > 0 {
 						fyne.Do(func() {
-							ft.lines.Refresh()
+							ft.refreshLines()
 							ft.lines.ScrollToBottom()
 						})
 					}
@@ -588,12 +606,18 @@ func (app *App) addFileTab(filePath string) {
 		nil,
 		nil,
 		nil,
-		ft.lines,
+		ft.lines.scroll,
 	)
 
 	tabItem := container.NewTabItem(fileName, content)
 	app.tabs.Append(tabItem)
 	app.pathForTab[tabItem] = filePath
+
+	// Rebuild lines to display initial content
+	fyne.Do(func() {
+		ft.refreshLines()
+		ft.lines.ScrollToBottom()
+	})
 
 	// Set the OnClosed callback once if not already set
 	if app.tabs.OnClosed == nil {
@@ -651,7 +675,7 @@ func (app *App) createKeywordPanel(ft *FileTailer) fyne.CanvasObject {
 				ft.AddKeyword(keyword, c)
 				entry.SetText("")
 				// We are on the UI thread here; refresh directly
-				ft.lines.Refresh()
+				ft.refreshLines()
 			}, app.w)
 			// Note: SetColor requires advanced mode which isn't available in this API
 			// User will need to pick color manually each time
@@ -665,7 +689,7 @@ func (app *App) createKeywordPanel(ft *FileTailer) fyne.CanvasObject {
 			ft.RemoveKeyword(keyword)
 			entry.SetText("")
 			// We are on the UI thread here; refresh directly
-			ft.lines.Refresh()
+			ft.refreshLines()
 		}
 	})
 
@@ -679,7 +703,7 @@ func (app *App) createKeywordPanel(ft *FileTailer) fyne.CanvasObject {
 			ft.RemoveKeyword(k)
 		}
 		// We are on the UI thread here; refresh directly
-		ft.lines.Refresh()
+		ft.refreshLines()
 	})
 
 	buttonBox := container.NewHBox(addBtn, removeBtn, viewBtn, clearBtn)
@@ -787,7 +811,7 @@ func showKeywords(parent fyne.Window, ft *FileTailer) {
 				// Show color picker to change keyword color
 				colorPicker := dialog.NewColorPicker("Select Color", fmt.Sprintf("Choose a color for '%s':", keyword), func(c color.Color) {
 					ft.AddKeyword(keyword, c)
-					ft.lines.Refresh()
+					ft.refreshLines()
 					list.Refresh()
 				}, keywordsWindow)
 				colorPicker.Show()
@@ -796,7 +820,7 @@ func showKeywords(parent fyne.Window, ft *FileTailer) {
 			removeBtn.OnTapped = func() {
 				// On UI thread: update model then refresh widgets directly
 				ft.RemoveKeyword(keyword)
-				ft.lines.Refresh()
+				ft.refreshLines()
 				list.Refresh()
 			}
 		},
@@ -1202,7 +1226,7 @@ func restorePreferences(app *App, myApp fyne.App) {
 
 			// Refresh to show the highlighting - use fyne.Do for thread safety
 			fyne.Do(func() {
-				ft.lines.Refresh()
+				ft.refreshLines()
 			})
 		}
 	}

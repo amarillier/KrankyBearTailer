@@ -1,5 +1,5 @@
-#!/usr/bin/env pwsh
-# Windows compile script for KrankyBearTailer (Windows build + optional packaging)
+# Windows compile script for KrankyBearTailer / tailer-windows (Windows build + optional packaging)
+# Note: Remove Unix shebang for Windows execution via SSH
 
 param(
     [switch]$Windows,
@@ -7,18 +7,30 @@ param(
     [switch]$All,
     [switch]$Current,
     [switch]$Package,              # After Windows build, run Inno Setup to create installer
-    [string]$InnoPath = "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe"  # Path to ISCC.exe
+    [string]$InnoPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"  # Path to ISCC.exe
 )
+
+# PowerShell execution policy and error handling (after param block)
+$ErrorActionPreference = "Continue"  # Continue on errors so we can report them
+
+# Get script directory and change to it (important for SSH execution)
+$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ($PSScriptRoot) {
+    Set-Location $PSScriptRoot
+    Write-Host "Changed to script directory: $PSScriptRoot" -ForegroundColor Gray
+} else {
+    $PSScriptRoot = $PWD.Path
+}
 
 Write-Host "KrankyBearTailer - Windows Compile Script" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
+Write-Host "Working directory: $PWD" -ForegroundColor Gray
 Write-Host "" 
 
 # Create bin directory if it doesn't exist
 New-Item -ItemType Directory -Force -Path bin | Out-Null
 
 # Cleanup previous Windows/Linux binaries only (keep Resources/ and other assets)
-#Remove-Item -Path (Join-Path bin 'KrankyBearTailer.exe') -Force -ErrorAction SilentlyContinue
 Remove-Item -Path (Join-Path bin 'tailer-linux') -Force -ErrorAction SilentlyContinue
 
 # Ensure no conflicting 32-bit resource objects linger
@@ -55,21 +67,21 @@ if ($All -or $Windows -or (-not $Linux -and -not $Current)) {
     $env:GOARCH = "amd64"
     # Always build as GUI app (no console window)
     $ldflags = "-s -w -H windowsgui"
-    go build -ldflags="$ldflags" -trimpath -o bin/KrankyBearTailer.exe
+    go build -ldflags="$ldflags" -trimpath -o bin/tailer-windows.exe
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ Windows build successful" -ForegroundColor Green
         if ($Package) {
             Write-Host "Packaging Windows installer with Inno Setup..." -ForegroundColor Yellow
             # Copy/rename to match Inno script expectation
             try {
-                Copy-Item -Path (Join-Path $PSScriptRoot "bin/KrankyBearTailer.exe") -Destination (Join-Path $PSScriptRoot "KrankyBearTailer.exe") -Force
+                Copy-Item -Path (Join-Path $PSScriptRoot "bin/tailer-windows.exe") -Destination (Join-Path $PSScriptRoot "tailer-windows.exe") -Force
             } catch {
                 Write-Host "Failed to copy Windows binary for packaging: $_" -ForegroundColor Red
                 $buildFailed = $true
             }
 
             if (Test-Path $InnoPath) {
-                & "$InnoPath" (Join-Path $PSScriptRoot "Inno/KrankyBearTailer.iss")
+                & "$InnoPath" "Inno/KrankyBearTailer.iss"
                 if ($LASTEXITCODE -eq 0) {
                     Write-Host "✓ Inno Setup packaging complete (see installers/ folder)" -ForegroundColor Green
                 } else {
