@@ -129,14 +129,23 @@ build_package() {
   esac
 
   # Source assets - depends on TYPE
+  # Determine binary name early for macOS staging
+  BIN_NAME="KrankyBearTailer"
+  
   if [[ "$TYPE" == "mac" ]]
   then
     SRC_BIN="bin/tailer-macos-${PKG_ARCH}"
+    SRC_RESOURCES="Resources"
+    SRC_INFO_PLIST="Info-plist.txt"
+    SRC_README_PLIST="Readme-plist.txt"
+    # These will be set from staging directory later
+    SRC_IMAGES=""
+    SRC_SOUNDS=""
   else
     SRC_BIN="bin/tailer-linux"
+    SRC_IMAGES="bin/Images"
+    SRC_SOUNDS="bin/Sounds"
   fi
-  SRC_IMAGES="bin/Images"
-  SRC_SOUNDS="bin/Sounds"
 
   # Validate sources
   if [[ ! -f "$SRC_BIN" ]]
@@ -149,23 +158,93 @@ build_package() {
     fi
     exit 1
   fi
-  if [[ ! -d "$SRC_IMAGES" ]]
+  if [[ "$TYPE" == "mac" ]]
   then
-    echo "Error: Missing directory $SRC_IMAGES" >&2
-    exit 1
-  fi
-  if [[ ! -d "$SRC_SOUNDS" ]]
-  then
-    echo "Error: Missing directory $SRC_SOUNDS" >&2
-    exit 1
+    if [[ ! -d "$SRC_RESOURCES" ]]
+    then
+      echo "Error: Missing directory $SRC_RESOURCES" >&2
+      exit 1
+    fi
+    if [[ ! -d "$SRC_RESOURCES/Images" ]]
+    then
+      echo "Error: Missing directory $SRC_RESOURCES/Images" >&2
+      exit 1
+    fi
+    if [[ ! -d "$SRC_RESOURCES/Sounds" ]]
+    then
+      echo "Error: Missing directory $SRC_RESOURCES/Sounds" >&2
+      exit 1
+    fi
+    if [[ ! -f "$SRC_INFO_PLIST" ]]
+    then
+      echo "Error: Missing file $SRC_INFO_PLIST" >&2
+      exit 1
+    fi
+  else
+    if [[ ! -d "$SRC_IMAGES" ]]
+    then
+      echo "Error: Missing directory $SRC_IMAGES" >&2
+      exit 1
+    fi
+    if [[ ! -d "$SRC_SOUNDS" ]]
+    then
+      echo "Error: Missing directory $SRC_SOUNDS" >&2
+      exit 1
+    fi
   fi
 
   mkdir -p "$OUTDIR"
 
-  # For Linux packages built on macOS, create a staging directory with files
+  # For macOS: Build complete .app bundle, then use it as source for fpm
+  # For Linux packages built on macOS, create staging directory with files
   # stripped of extended attributes to avoid tar header compatibility issues
   STAGING_DIR=""
-  if [[ "$TYPE" == "linux" && "$(uname -s)" == "Darwin" ]]
+  APP_BUNDLE=""
+  
+  if [[ "$TYPE" == "mac" ]]
+  then
+    # Build the complete .app bundle structure
+    APP_BUNDLE="KrankyBearTailer.app"
+    echo "Building .app bundle: $APP_BUNDLE..."
+    
+    # Remove existing bundle if present
+    rm -rf "$APP_BUNDLE"
+    
+    # Create app bundle structure
+    mkdir -p "$APP_BUNDLE/Contents/MacOS/Resources"
+    
+    # Copy binary to Contents/MacOS
+    cp "$SRC_BIN" "$APP_BUNDLE/Contents/MacOS/$BIN_NAME"
+    
+    # Create symlink: tailer -> KrankyBearTailer in Contents/MacOS
+    ln -s "$BIN_NAME" "$APP_BUNDLE/Contents/MacOS/tailer"
+    
+    # Copy Resources subdirectories to Contents/MacOS/Resources
+    cp -R "$SRC_RESOURCES/Images" "$APP_BUNDLE/Contents/MacOS/Resources/Images"
+    cp -R "$SRC_RESOURCES/Sounds" "$APP_BUNDLE/Contents/MacOS/Resources/Sounds"
+    
+    # Set proper permissions on Resources directories (755 = rwxr-xr-x)
+    chmod -R 755 "$APP_BUNDLE/Contents/MacOS/Resources"
+    
+    # Copy Info-plist.txt to Contents
+    cp "$SRC_INFO_PLIST" "$APP_BUNDLE/Contents/Info-plist.txt"
+    cp "$SRC_README_PLIST" "$APP_BUNDLE/Contents/Readme-plist.txt"
+    
+    # Verify files were copied correctly
+    if [[ ! -d "$APP_BUNDLE/Contents/MacOS/Resources/Images" ]] || [[ -z "$(ls -A "$APP_BUNDLE/Contents/MacOS/Resources/Images" 2>/dev/null)" ]]
+    then
+      echo "Error: Images directory is empty or missing in app bundle" >&2
+      exit 1
+    fi
+    if [[ ! -d "$APP_BUNDLE/Contents/MacOS/Resources/Sounds" ]] || [[ -z "$(ls -A "$APP_BUNDLE/Contents/MacOS/Resources/Sounds" 2>/dev/null)" ]]
+    then
+      echo "Error: Sounds directory is empty or missing in app bundle" >&2
+      exit 1
+    fi
+    
+    echo "App bundle created successfully."
+    
+  elif [[ "$TYPE" == "linux" && "$(uname -s)" == "Darwin" ]]
   then
     echo "Creating staging directory without macOS extended attributes..."
     STAGING_DIR=$(mktemp -d -t fpm-staging.XXXXXX)
@@ -174,9 +253,12 @@ build_package() {
     
     # Copy files to staging directory using cp -X which explicitly excludes
     # extended attributes (xattr) that cause issues with Ubuntu's dpkg
-    cp -X "$SRC_BIN" "$STAGING_DIR/tailer-linux"
+    cp -X "$SRC_BIN" "$STAGING_DIR/krankybeartailer"
     cp -XR "$SRC_IMAGES" "$STAGING_DIR/Images"
     cp -XR "$SRC_SOUNDS" "$STAGING_DIR/Sounds"
+    
+    # Create symlink: tailer -> krankybeartailer (similar to macOS)
+    ln -s "krankybeartailer" "$STAGING_DIR/tailer"
     
     # Aggressively strip any remaining extended attributes from staging directory
     # This is critical for Ubuntu dpkg compatibility
@@ -188,7 +270,8 @@ build_package() {
     fi
     
     # Update source paths to point to staging directory
-    SRC_BIN="$STAGING_DIR/tailer-linux"
+    SRC_BIN="$STAGING_DIR/krankybeartailer"
+    SRC_SYMLINK_TAILER="$STAGING_DIR/tailer"
     SRC_IMAGES="$STAGING_DIR/Images"
     SRC_SOUNDS="$STAGING_DIR/Sounds"
     
@@ -216,30 +299,49 @@ build_package() {
     echo "Building macOS .pkg ($PKG_ARCH) -> $PKG_OUTFILE..."
     
     # macOS .app bundle structure:
+    # /Applications/KrankyBearTailer.app/Contents/Info-plist.txt (sample Info.plist)
     # /Applications/KrankyBearTailer.app/Contents/MacOS/KrankyBearTailer (executable)
     # /Applications/KrankyBearTailer.app/Contents/MacOS/Resources/Images (resources)
     # /Applications/KrankyBearTailer.app/Contents/MacOS/Resources/Sounds (sounds)
     # Note: App looks for Resources/Images and Resources/Sounds relative to executable
     APP_NAME="KrankyBearTailer.app"
     APP_DIR="/Applications/$APP_NAME"
-    MACOS_DIR="$APP_DIR/Contents/MacOS"
+    CONTENTS_DIR="$APP_DIR/Contents"
+    MACOS_DIR="$CONTENTS_DIR/MacOS"
     RESOURCES_DIR="$MACOS_DIR/Resources"
     
-    # Determine binary name - use app name without .app
-    BIN_NAME="KrankyBearTailer"
+    # Note: BIN_NAME is already defined earlier
+    # Map files individually from the app bundle to avoid directory nesting
+    # Build fpm file list
+    FPM_FILES=(
+      "$APP_BUNDLE/Contents/MacOS/$BIN_NAME=$MACOS_DIR/$BIN_NAME"
+      "$APP_BUNDLE/Contents/MacOS/tailer=$MACOS_DIR/tailer"
+      "$APP_BUNDLE/Contents/Info-plist.txt=$CONTENTS_DIR/Info-plist.txt"
+      "$APP_BUNDLE/Contents/Readme-plist.txt=$CONTENTS_DIR/Readme-plist.txt"
+    )
+    
+    # Map Images files
+    while IFS= read -r -d '' file; do
+      rel_path="${file#$APP_BUNDLE/Contents/MacOS/Resources/Images/}"
+      FPM_FILES+=("$file=$RESOURCES_DIR/Images/$rel_path")
+    done < <(find "$APP_BUNDLE/Contents/MacOS/Resources/Images" -type f -print0)
+    
+    # Map Sounds files
+    while IFS= read -r -d '' file; do
+      rel_path="${file#$APP_BUNDLE/Contents/MacOS/Resources/Sounds/}"
+      FPM_FILES+=("$file=$RESOURCES_DIR/Sounds/$rel_path")
+    done < <(find "$APP_BUNDLE/Contents/MacOS/Resources/Sounds" -type f -print0)
     
     fpm \
       "${COMMON_ARGS[@]}" \
       -t osxpkg \
       -a "$PKG_ARCH" \
       --directories "$APP_DIR" \
-      --directories "$APP_DIR/Contents" \
+      --directories "$CONTENTS_DIR" \
       --directories "$MACOS_DIR" \
       --directories "$RESOURCES_DIR" \
       --package "$PKG_OUTFILE" \
-      "$SRC_BIN=$MACOS_DIR/$BIN_NAME" \
-      "$SRC_IMAGES=$RESOURCES_DIR/Images" \
-      "$SRC_SOUNDS=$RESOURCES_DIR/Sounds"
+      "${FPM_FILES[@]}"
     
     ./setIcon.sh Resources/Images/KrankyBearHogwartsSorting.png "$PKG_OUTFILE"
     echo ""
@@ -261,6 +363,7 @@ build_package() {
       --directories /opt/local/bin/Resources \
       --package "$DEB_OUTFILE" \
       "$SRC_BIN=/opt/local/bin/krankybeartailer" \
+      "$SRC_SYMLINK_TAILER=/opt/local/bin/tailer" \
       "$SRC_IMAGES=/opt/local/bin/Resources/Images" \
       "$SRC_SOUNDS=/opt/local/bin/Resources/Sounds"
     
@@ -275,6 +378,7 @@ build_package() {
       --directories /opt/local/bin/Resources \
       --package "$RPM_OUTFILE" \
       "$SRC_BIN=/opt/local/bin/krankybeartailer" \
+      "$SRC_SYMLINK_TAILER=/opt/local/bin/tailer" \
       "$SRC_IMAGES=/opt/local/bin/Resources/Images" \
       "$SRC_SOUNDS=/opt/local/bin/Resources/Sounds"
     

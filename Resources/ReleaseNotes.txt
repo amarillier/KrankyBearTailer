@@ -2,12 +2,14 @@ Release notes
 
 Planned updates:
 0.NEXT
-- installers - Mac pkg, setup.exe, .rpm, .deb, maybe others, as well as portable app versions will continue
+- 
 
 
 Known issues:
 - 
 
+0.1.1
+- minor updates, build mechanisms improved, installers, version bump
 
 0.1.0 
 - initial checkin
