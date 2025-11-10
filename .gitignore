@@ -25,6 +25,8 @@ git.sh
 latestcheck.json
 
 ## Build artifacts
+bin/.DS_Store
+Resources/.DS_Store
 dist/
 build/
 KrankyBearTailer.app/

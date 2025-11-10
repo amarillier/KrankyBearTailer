@@ -5,10 +5,10 @@ PATH="/opt/homebrew/bin:$PATH"
 
 # fpm-based packager for Tailer
 # - macOS: Packages bin/tailer-macos-{arch} as .pkg installer to /Applications
-# - Linux: Packages bin/tailer-linux as .deb and .rpm installers
+# - Linux: Packages bin/tailer-linux-amd64 as .deb and .rpm installers
 # - macOS: Installs as KrankyBearTailer.app bundle structure
-# - Linux: Includes bin/Images -> /opt/local/bin/Resources/Images
-# - Linux: Includes bin/Sounds -> /opt/local/bin/Resources/Sounds
+# - Linux: Includes Resources/Images -> /opt/local/bin/Resources/Images
+# - Linux: Includes Resources/Sounds -> /opt/local/bin/Resources/Sounds
 # - Outputs to ./installers (configurable)
 
 usage() {
@@ -21,7 +21,7 @@ Arguments:
   all         Build both Linux and macOS packages
 
 Environment variables (optional):
-  VERSION     Package version (default: 0.1.0)
+  VERSION     Package version (default: 0.1.3)
   ITERATION   Package iteration/release (default: 1)
   ARCH        Target arch: amd64|arm64 (default: native for mac, amd64 for linux)
   OUTDIR      Output directory (default: ./installers)
@@ -29,6 +29,8 @@ Environment variables (optional):
   VENDOR      Vendor (default: KrankyBear)
   URL         Project URL (default: https://github.com/amarillier/KrankyBearTailer)
   LICENSE     License (default: GNU GPL v3)
+  REPLACES    Comma-separated list of packages this replaces (default: krankybeartailer)
+              Allows overwriting shared files like /opt/local/bin/Resources/LICENSE
 
 Examples:
   # Build macOS package
@@ -83,13 +85,16 @@ done
 
 # Configurable via env vars
 NAME=${NAME:-KrankyBearTailer}
-VERSION=${VERSION:-0.1.1}
+VERSION=${VERSION:-0.1.3}
 ITERATION=${ITERATION:-1}
 OUTDIR=${OUTDIR:-./installers}
 MAINTAINER=${MAINTAINER:-"amarillier@gmail.com"}
 VENDOR=${VENDOR:-"KrankyBear"}
 URL=${URL:-"https://github.com/amarillier/KrankyBearTailer"}
 LICENSE=${LICENSE:-"GNU GPL v3"}
+# Packages this can replace (allows overwriting shared files like LICENSE)
+# Default includes common KrankyBear packages that share /opt/local/bin/Resources/LICENSE
+REPLACES=${REPLACES:-"krankybeartailer"}
 
 # Function to build packages for a specific type
 build_package() {
@@ -142,9 +147,9 @@ build_package() {
     SRC_IMAGES=""
     SRC_SOUNDS=""
   else
-    SRC_BIN="bin/tailer-linux"
-    SRC_IMAGES="bin/Images"
-    SRC_SOUNDS="bin/Sounds"
+    SRC_BIN="bin/tailer-linux-amd64"
+    SRC_IMAGES="Resources/Images"
+    SRC_SOUNDS="Resources/Sounds"
     SRC_RELEASE_NOTES="ReleaseNotes.txt"
     SRC_LICENSE="LICENSE"
   fi
@@ -314,7 +319,7 @@ build_package() {
     --vendor "$VENDOR"
     --url "$URL"
     --license "$LICENSE"
-    --description "KrankyBear Tailer - A cross-platform GUI log tail application"
+    --description "KrankyBear Tailer - A cross-platform GUI log tailing application"
     -f
   )
 
@@ -370,7 +375,7 @@ build_package() {
       --package "$PKG_OUTFILE" \
       "${FPM_FILES[@]}"
     
-    ./setIcon.sh Resources/Images/KrankyBearHogwartsSorting.png "$PKG_OUTFILE"
+    ./setIcon.sh Resources/Images/KrankyBearBeret.png "$PKG_OUTFILE"
     echo ""
     echo "Done. Package created:"
     echo "  $PKG_OUTFILE"
@@ -381,13 +386,42 @@ build_package() {
     RPM_OUTFILE="$OUTDIR/krankybeartailer_${VERSION}-${ITERATION}_${RPM_ARCH}.rpm"
     
     echo "Building .deb ($DEB_ARCH) -> $DEB_OUTFILE..."
+    # Build fpm args array for .deb
+    DEB_ARGS=(
+      "${COMMON_ARGS[@]}"
+      -t deb
+      -a "$DEB_ARCH"
+      --deb-no-default-config-files
+      --directories /opt/local/bin
+      --directories /opt/local/bin/Resources
+    )
+    
+    # Add --replaces if REPLACES is set (allows overwriting shared files)
+    # fpm's --replaces works for both deb and rpm packages
+    if [[ -n "$REPLACES" ]]
+    then
+      # Convert comma-separated list and add --replaces for each package
+      # Save and restore IFS to avoid side effects
+      OLD_IFS="$IFS"
+      IFS=',' read -ra REPLACES_ARRAY <<< "$REPLACES"
+      IFS="$OLD_IFS"
+      for pkg in "${REPLACES_ARRAY[@]}"
+      do
+        # Trim whitespace from package name
+        pkg=$(echo "$pkg" | xargs)
+        [[ -n "$pkg" ]] && DEB_ARGS+=(--replaces "$pkg")
+      done
+      echo "  Note: Package will replace: $REPLACES (allows overwriting shared LICENSE file)"
+    fi
+    
+    # Mark LICENSE file as a config file so it's preserved on uninstall
+    # This allows the LICENSE to remain even when this package is removed,
+    # since it's shared between multiple KrankyBear packages
+    DEB_ARGS+=(--config-files "/opt/local/bin/Resources/LICENSE")
+    echo "  Note: LICENSE file will be preserved on uninstall (marked as config file)"
+    
     fpm \
-      "${COMMON_ARGS[@]}" \
-      -t deb \
-      -a "$DEB_ARCH" \
-      --deb-no-default-config-files \
-      --directories /opt/local/bin \
-      --directories /opt/local/bin/Resources \
+      "${DEB_ARGS[@]}" \
       --package "$DEB_OUTFILE" \
       "$SRC_BIN=/opt/local/bin/krankybeartailer" \
       "$SRC_SYMLINK_TAILER=/opt/local/bin/tailer" \
@@ -401,12 +435,40 @@ build_package() {
     # Build RPM package with all files including symlink
     # Remove --directories flags to avoid "File listed twice" warnings
     # RPM will auto-create directories from file paths
+    RPM_ARGS=(
+      "${COMMON_ARGS[@]}"
+      -t rpm
+      -a "$RPM_ARCH"
+      --rpm-os linux
+      --rpm-auto-add-directories
+    )
+    
+    # Add --replaces if REPLACES is set (allows overwriting shared files)
+    # fpm's --replaces works for both deb and rpm packages
+    if [[ -n "$REPLACES" ]]
+    then
+      # Convert comma-separated list and add --replaces for each package
+      # Save and restore IFS to avoid side effects
+      OLD_IFS="$IFS"
+      IFS=',' read -ra REPLACES_ARRAY <<< "$REPLACES"
+      IFS="$OLD_IFS"
+      for pkg in "${REPLACES_ARRAY[@]}"
+      do
+        # Trim whitespace from package name
+        pkg=$(echo "$pkg" | xargs)
+        [[ -n "$pkg" ]] && RPM_ARGS+=(--replaces "$pkg")
+      done
+      echo "  Note: Package will replace: $REPLACES (allows overwriting shared LICENSE file)"
+    fi
+    
+    # Mark LICENSE file as a config file so it's preserved on uninstall
+    # This allows the LICENSE to remain even when this package is removed,
+    # since it's shared between multiple KrankyBear packages
+    RPM_ARGS+=(--config-files "/opt/local/bin/Resources/LICENSE")
+    echo "  Note: LICENSE file will be preserved on uninstall (marked as config file)"
+    
     fpm \
-      "${COMMON_ARGS[@]}" \
-      -t rpm \
-      -a "$RPM_ARCH" \
-      --rpm-os linux \
-      --rpm-auto-add-directories \
+      "${RPM_ARGS[@]}" \
       --package "$RPM_OUTFILE" \
       "$SRC_BIN=/opt/local/bin/krankybeartailer" \
       "$SRC_SYMLINK_TAILER=/opt/local/bin/tailer" \

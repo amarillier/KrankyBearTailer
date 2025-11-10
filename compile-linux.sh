@@ -18,7 +18,7 @@ then
 fi
 
 echo "Building for Linux (native)..."
-GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/tailer-linux
+GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/tailer-linux-amd64
 if [ $? -eq 0 ]
 then
     echo "✓ Linux build successful"
