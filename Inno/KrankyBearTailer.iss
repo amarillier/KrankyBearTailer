@@ -53,7 +53,8 @@ Name: "startup"; Description: "Automatically start on login (or enable later via
 Source: "..\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Resources\*"; DestDir: "{app}\Resources"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
-Source: "..\ReleaseNotes.txt"; DestDir: "{app}"; Flags: isreadme
+; Suppress release notes - they are in the Resources directory
+; Source: "..\ReleaseNotes.txt"; DestDir: "{app}"; Flags: isreadme
 
 [Registry]
 Root: HKA; Subkey: "Software\Classes\{#MyAppAssocExt}\OpenWithProgids"; ValueType: string; ValueName: "{#MyAppAssocKey}"; ValueData: ""; Flags: uninsdeletevalue

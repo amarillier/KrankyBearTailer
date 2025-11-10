@@ -28,7 +28,7 @@ Environment variables (optional):
   MAINTAINER  Maintainer (default: amarillier@gmail.com)
   VENDOR      Vendor (default: KrankyBear)
   URL         Project URL (default: https://github.com/amarillier/KrankyBearTailer)
-  LICENSE     License (default: MIT)
+  LICENSE     License (default: GNU GPL v3)
 
 Examples:
   # Build macOS package
@@ -89,7 +89,7 @@ OUTDIR=${OUTDIR:-./installers}
 MAINTAINER=${MAINTAINER:-"amarillier@gmail.com"}
 VENDOR=${VENDOR:-"KrankyBear"}
 URL=${URL:-"https://github.com/amarillier/KrankyBearTailer"}
-LICENSE=${LICENSE:-"MIT"}
+LICENSE=${LICENSE:-"GNU GPL v3"}
 
 # Function to build packages for a specific type
 build_package() {
@@ -145,6 +145,8 @@ build_package() {
     SRC_BIN="bin/tailer-linux"
     SRC_IMAGES="bin/Images"
     SRC_SOUNDS="bin/Sounds"
+    SRC_RELEASE_NOTES="ReleaseNotes.txt"
+    SRC_LICENSE="LICENSE"
   fi
 
   # Validate sources
@@ -191,6 +193,16 @@ build_package() {
       echo "Error: Missing directory $SRC_SOUNDS" >&2
       exit 1
     fi
+    if [[ ! -f "$SRC_RELEASE_NOTES" ]]
+    then
+      echo "Error: Missing file $SRC_RELEASE_NOTES" >&2
+      exit 1
+    fi
+    if [[ ! -f "$SRC_LICENSE" ]]
+    then
+      echo "Error: Missing file $SRC_LICENSE" >&2
+      exit 1
+    fi
   fi
 
   mkdir -p "$OUTDIR"
@@ -222,6 +234,7 @@ build_package() {
     # Copy Resources subdirectories to Contents/MacOS/Resources
     cp -R "$SRC_RESOURCES/Images" "$APP_BUNDLE/Contents/MacOS/Resources/Images"
     cp -R "$SRC_RESOURCES/Sounds" "$APP_BUNDLE/Contents/MacOS/Resources/Sounds"
+    cp -R "$SRC_RESOURCES/ReleaseNotes.txt" "$APP_BUNDLE/Contents/MacOS/Resources/ReleaseNotes.txt"
     
     # Set proper permissions on Resources directories (755 = rwxr-xr-x)
     chmod -R 755 "$APP_BUNDLE/Contents/MacOS/Resources"
@@ -257,7 +270,18 @@ build_package() {
     cp -XR "$SRC_IMAGES" "$STAGING_DIR/Images"
     cp -XR "$SRC_SOUNDS" "$STAGING_DIR/Sounds"
     
+    # Copy ReleaseNotes.txt and rename to ReleaseNotes-tailer.txt
+    cp "$SRC_RELEASE_NOTES" "$STAGING_DIR/ReleaseNotes-tailer.txt"
+    # Set proper permissions (644 = rw-r--r--)
+    chmod 644 "$STAGING_DIR/ReleaseNotes-tailer.txt"
+    
+    # Copy LICENSE file
+    cp "$SRC_LICENSE" "$STAGING_DIR/LICENSE"
+    # Set proper permissions (644 = rw-r--r--)
+    chmod 644 "$STAGING_DIR/LICENSE"
+    
     # Create symlink: tailer -> krankybeartailer (similar to macOS)
+    # Use relative path - RPM will handle it correctly
     ln -s "krankybeartailer" "$STAGING_DIR/tailer"
     
     # Aggressively strip any remaining extended attributes from staging directory
@@ -274,6 +298,8 @@ build_package() {
     SRC_SYMLINK_TAILER="$STAGING_DIR/tailer"
     SRC_IMAGES="$STAGING_DIR/Images"
     SRC_SOUNDS="$STAGING_DIR/Sounds"
+    SRC_RELEASE_NOTES_STAGED="$STAGING_DIR/ReleaseNotes-tailer.txt"
+    SRC_LICENSE_STAGED="$STAGING_DIR/LICENSE"
     
     # Also set environment variable as additional safeguard
     export COPYFILE_DISABLE=1
@@ -288,7 +314,7 @@ build_package() {
     --vendor "$VENDOR"
     --url "$URL"
     --license "$LICENSE"
-    --description "Kranky Bear Tailer - A cross-platform GUI log tail application"
+    --description "KrankyBear Tailer - A cross-platform GUI log tail application"
     -f
   )
 
@@ -318,6 +344,7 @@ build_package() {
       "$APP_BUNDLE/Contents/MacOS/tailer=$MACOS_DIR/tailer"
       "$APP_BUNDLE/Contents/Info-plist.txt=$CONTENTS_DIR/Info-plist.txt"
       "$APP_BUNDLE/Contents/Readme-plist.txt=$CONTENTS_DIR/Readme-plist.txt"
+      "$APP_BUNDLE/Contents/MacOS/Resources/ReleaseNotes.txt=$RESOURCES_DIR/ReleaseNotes.txt"
     )
     
     # Map Images files
@@ -365,22 +392,28 @@ build_package() {
       "$SRC_BIN=/opt/local/bin/krankybeartailer" \
       "$SRC_SYMLINK_TAILER=/opt/local/bin/tailer" \
       "$SRC_IMAGES=/opt/local/bin/Resources/Images" \
-      "$SRC_SOUNDS=/opt/local/bin/Resources/Sounds"
+      "$SRC_SOUNDS=/opt/local/bin/Resources/Sounds" \
+      "$SRC_RELEASE_NOTES_STAGED=/opt/local/bin/Resources/ReleaseNotes-tailer.txt" \
+      "$SRC_LICENSE_STAGED=/opt/local/bin/Resources/LICENSE"
     
     echo ""
     echo "Building .rpm ($RPM_ARCH) -> $RPM_OUTFILE..."
+    # Build RPM package with all files including symlink
+    # Remove --directories flags to avoid "File listed twice" warnings
+    # RPM will auto-create directories from file paths
     fpm \
       "${COMMON_ARGS[@]}" \
       -t rpm \
       -a "$RPM_ARCH" \
       --rpm-os linux \
-      --directories /opt/local/bin \
-      --directories /opt/local/bin/Resources \
+      --rpm-auto-add-directories \
       --package "$RPM_OUTFILE" \
       "$SRC_BIN=/opt/local/bin/krankybeartailer" \
       "$SRC_SYMLINK_TAILER=/opt/local/bin/tailer" \
       "$SRC_IMAGES=/opt/local/bin/Resources/Images" \
-      "$SRC_SOUNDS=/opt/local/bin/Resources/Sounds"
+      "$SRC_SOUNDS=/opt/local/bin/Resources/Sounds" \
+      "$SRC_RELEASE_NOTES_STAGED=/opt/local/bin/Resources/ReleaseNotes-tailer.txt" \
+      "$SRC_LICENSE_STAGED=/opt/local/bin/Resources/LICENSE"
     
     echo ""
     echo "Done. Packages created:"
