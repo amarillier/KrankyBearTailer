@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -13,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	updatechecker "github.com/amarillier/go-update-checker"
+	"github.com/hashicorp/go-version"
 	"github.com/itchyny/volume-go"
 )
 
@@ -158,13 +160,33 @@ func dadjoke() string {
 	return (joke)
 }
 
-func updateChecker(repoOwner string, repo string, repoName string, repodl string) (string, bool) {
-	// uc := updatechecker.New("amarillier", "KrankyBearTailer", "Kranky Bear Tailer", "", 1, false)
-	uc := updatechecker.New(repoOwner, repo, repoName, repodl, 0, false)
+// updateChecker checks repoOwner/repo's latest published GitHub release against
+// appVersion. minDaysInterval throttles the check: 0 = never throttled (manual
+// "Check for Updates"), >0 for a quiet automatic check on launch. remoteTag is
+// the latest release's tag, so callers can tell via versionIsNewer when this
+// build is *ahead* of it (an unpublished/dev build), not just whether an
+// update is available.
+func updateChecker(repoOwner string, repo string, repoName string, repodl string, minDaysInterval int) (msg string, updateAvailable bool, remoteTag string) {
+	uc := updatechecker.New(repoOwner, repo, repoName, repodl, minDaysInterval, false)
 	uc.CheckForUpdate(appVersion)
-	// uc.PrintMessage()
-	updtmsg := uc.Message
-	return updtmsg, uc.UpdateAvailable
+	return uc.Message, uc.UpdateAvailable, uc.RemoteTag
+}
+
+// versionIsNewer reports whether local is a strictly newer semantic version
+// than remote -- i.e. this build is ahead of the latest published release
+// (shown with the HardHat badge rather than reported as "up to date").
+// Returns false if remote is empty (e.g. offline) or either side fails to
+// parse, since neither case can be confidently called "ahead".
+func versionIsNewer(local, remote string) bool {
+	if strings.TrimSpace(remote) == "" {
+		return false
+	}
+	lv, errL := version.NewVersion(strings.TrimPrefix(strings.TrimSpace(local), "v"))
+	rv, errR := version.NewVersion(strings.TrimPrefix(strings.TrimSpace(remote), "v"))
+	if errL != nil || errR != nil {
+		return false
+	}
+	return lv.GreaterThan(rv)
 }
 
 // "Now this is not the end. It is not even the beginning of the end. But it is, perhaps, the end of the beginning." Winston Churchill, November 10, 1942

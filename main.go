@@ -18,7 +18,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/cmd/fyne_settings/settings"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
@@ -30,7 +29,7 @@ import (
 
 const (
 	appName    = "Kranky Bear Tailer"
-	appVersion = "0.1.1"
+	appVersion = "0.2.0"
 	appAuthor  = "Allan Marillier"
 )
 
@@ -468,7 +467,7 @@ func (ft *FileTailer) StartTail() {
 							var err error
 
 							// First try relative to current working directory
-							soundPath = "Resources/Sounds/boing.mp3"
+							soundPath = "assets/sounds/boing.mp3"
 							if _, err = os.Stat(soundPath); err == nil {
 								// fmt.Printf("DEBUG: Playing sound from: %s\n", soundPath)
 								playMp3(soundPath)
@@ -479,7 +478,7 @@ func (ft *FileTailer) StartTail() {
 							exePath, err := os.Executable()
 							if err == nil {
 								appDir := filepath.Dir(exePath)
-								soundPath = filepath.Join(appDir, "Resources", "Sounds", "boing.mp3")
+								soundPath = filepath.Join(appDir, "assets", "Sounds", "boing.mp3")
 								if _, err := os.Stat(soundPath); err == nil {
 									// fmt.Printf("DEBUG: Playing sound from: %s\n", soundPath)
 									playMp3(soundPath)
@@ -490,7 +489,7 @@ func (ft *FileTailer) StartTail() {
 							// Fallback: try from source directory structure
 							cwd, err := os.Getwd()
 							if err == nil {
-								soundPath = filepath.Join(cwd, "Resources", "Sounds", "boing.mp3")
+								soundPath = filepath.Join(cwd, "assets", "Sounds", "boing.mp3")
 								if _, err := os.Stat(soundPath); err == nil {
 									// fmt.Printf("DEBUG: Playing sound from: %s\n", soundPath)
 									playMp3(soundPath)
@@ -869,7 +868,7 @@ A cross-platform GUI log tail application for monitoring log files in real-time.
 - Follow multiple log files in tabs
 - Real-time file tailing with live updates
 - Keyword highlighting for easy log scanning
-- Optional audio notifications for matching lines, mp3 files in app dir/Resources/Sounds or browse to any others
+- Optional audio notifications for matching lines, mp3 files in app dir/assets/sounds or browse to any others
 - Cross-platform (Windows, Linux, macOS)
 
 **Author:** %s
@@ -930,6 +929,9 @@ func main() {
 	}
 
 	myApp := app.NewWithID("com.krankybeartailer.app")
+
+	// Restore the user's saved theme preference (light/dark/system)
+	loadTheme(myApp)
 
 	// Initialize speaker at startup for faster audio
 	initSpeaker()
@@ -1035,22 +1037,33 @@ Welcome to %s!
 		fyne.NewMenuItem("Application Settings...", func() {
 			showSettings(app.w, myApp)
 		}),
-		fyne.NewMenuItem("Theme Settings...", func() {
-			showThemeSettings(app.w, myApp)
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Dark Theme", func() {
+			setDarkTheme(myApp)
+		}),
+		fyne.NewMenuItem("Light Theme", func() {
+			setLightTheme(myApp)
+		}),
+		fyne.NewMenuItem("System Theme", func() {
+			setSystemTheme(myApp)
 		}),
 	)
 
 	helpMenu := fyne.NewMenu("Help",
 		fyne.NewMenuItem("Check for Updates...", func() {
 			go func() {
-				updtmsg, _ := updateChecker("amarillier", "KrankyBearTailer", "Kranky Bear Tailer", "https://github.com/amarillier/KrankyBearTailer/releases/latest")
+				updtmsg, _, remoteTag := updateChecker("amarillier", "KrankyBearTailer", "Kranky Bear Tailer", "https://github.com/amarillier/KrankyBearTailer/releases/latest", 0)
+				ahead := versionIsNewer(appVersion, remoteTag)
 				fyne.Do(func() {
-					updateAlert(myApp, updtmsg)
+					updateAlert(myApp, updtmsg, ahead)
 				})
 			}()
 		}),
 		fyne.NewMenuItem("About", func() {
 			showAbout(app.w)
+		}),
+		fyne.NewMenuItem("Help", func() {
+			showHelp(myApp)
 		}),
 	)
 
@@ -1059,10 +1072,11 @@ Welcome to %s!
 
 	// check update first (in background to not block startup)
 	go func() {
-		updtmsg, updateAvail := updateChecker("amarillier", "KrankyBearTailer", "Kranky Bear Tailer", "https://github.com/amarillier/KrankyBearTailer/releases/latest")
+		updtmsg, updateAvail, remoteTag := updateChecker("amarillier", "KrankyBearTailer", "Kranky Bear Tailer", "https://github.com/amarillier/KrankyBearTailer/releases/latest", 1)
 		if updateAvail {
+			ahead := versionIsNewer(appVersion, remoteTag)
 			fyne.Do(func() {
-				updateAlert(myApp, updtmsg)
+				updateAlert(myApp, updtmsg, ahead)
 			})
 		}
 	}()
@@ -1125,25 +1139,38 @@ Welcome to %s!
 			w.RequestFocus()
 		})
 
-		themeSettings := fyne.NewMenuItem("Theme Settings...", func() {
-			showThemeSettings(w, myApp)
-		})
-
 		appSettings := fyne.NewMenuItem("Settings...", func() {
 			showSettings(w, myApp)
 		})
 
+		darkTheme := fyne.NewMenuItem("Dark Theme", func() {
+			setDarkTheme(myApp)
+		})
+
+		lightTheme := fyne.NewMenuItem("Light Theme", func() {
+			setLightTheme(myApp)
+		})
+
+		systemTheme := fyne.NewMenuItem("System Theme", func() {
+			setSystemTheme(myApp)
+		})
+
 		checkUpdates := fyne.NewMenuItem("Check for Updates...", func() {
 			go func() {
-				updtmsg, _ := updateChecker("amarillier", "KrankyBearTailer", "Kranky Bear Tailer", "https://github.com/amarillier/KrankyBearTailer/releases/latest")
+				updtmsg, _, remoteTag := updateChecker("amarillier", "KrankyBearTailer", "Kranky Bear Tailer", "https://github.com/amarillier/KrankyBearTailer/releases/latest", 0)
+				ahead := versionIsNewer(appVersion, remoteTag)
 				fyne.Do(func() {
-					updateAlert(myApp, updtmsg)
+					updateAlert(myApp, updtmsg, ahead)
 				})
 			}()
 		})
 
 		about := fyne.NewMenuItem("About", func() {
 			showAbout(w)
+		})
+
+		help := fyne.NewMenuItem("Help", func() {
+			showHelp(myApp)
 		})
 
 		quit := fyne.NewMenuItem("Quit", myApp.Quit)
@@ -1154,11 +1181,14 @@ Welcome to %s!
 			fyne.NewMenuItemSeparator(),
 			openFile,
 			fyne.NewMenuItemSeparator(),
-			themeSettings,
 			appSettings,
+			darkTheme,
+			lightTheme,
+			systemTheme,
 			fyne.NewMenuItemSeparator(),
 			checkUpdates,
 			about,
+			help,
 			fyne.NewMenuItemSeparator(),
 			quit)
 		desk.SetSystemTrayMenu(menu)
@@ -1232,74 +1262,6 @@ func restorePreferences(app *App, myApp fyne.App) {
 	}
 }
 
-func showThemeSettings(parent fyne.Window, myApp fyne.App) {
-	// Check if window already exists
-	if themeWin != nil {
-		themeWin.RequestFocus()
-		return
-	}
-
-	// Use Fyne's built-in settings to allow theme customization
-	// This gives users the ability to switch between Light/Dark themes
-	// and customize appearance that affects ALL Fyne apps
-
-	s := settings.NewSettings()
-	themeWindow := myApp.NewWindow("Theme Settings - All Fyne Apps")
-	// Set seasonal window icon
-	{
-		_, month, _ := time.Now().Date()
-		if month == time.December {
-			themeWindow.SetIcon(resourceKrankyBearChristmasGrinchPng)
-		} else {
-			themeWindow.SetIcon(resourceKrankyBearHogwartsSortingPng)
-		}
-	}
-	themeWin = themeWindow
-	themeWindow.Resize(fyne.NewSize(520, 520))
-	themeWindow.CenterOnScreen()
-
-	appearance := s.LoadAppearanceScreen(parent)
-
-	// Add a helpful label
-	infoLabel := widget.NewLabel("Changing theme affects ALL Fyne-based applications")
-	infoLabel.Alignment = fyne.TextAlignCenter
-
-	// Add Close button at the bottom
-	closeButton := widget.NewButton("Close", func() {
-		themeWindow.Close()
-	})
-	closeButton.Importance = widget.MediumImportance
-
-	// Wrap appearance content with Close button at the bottom
-	appearanceWithButton := container.NewBorder(
-		nil,
-		container.NewHBox(layout.NewSpacer(), closeButton),
-		nil,
-		nil,
-		appearance,
-	)
-
-	tabs := container.NewAppTabs(
-		&container.TabItem{
-			Text: "Theme",
-			Icon: s.AppearanceIcon(),
-			Content: container.NewVBox(
-				infoLabel,
-				appearanceWithButton,
-			),
-		},
-	)
-	tabs.SetTabLocation(container.TabLocationLeading)
-	themeWindow.SetContent(tabs)
-
-	themeWindow.SetCloseIntercept(func() {
-		themeWindow.Close()
-		themeWin = nil
-	})
-
-	themeWindow.Show()
-}
-
 func showSettings(parent fyne.Window, myApp fyne.App) {
 	if settingsWin != nil {
 		settingsWin.RequestFocus()
@@ -1344,7 +1306,7 @@ func showSettings(parent fyne.Window, myApp fyne.App) {
 			selectedPath := read.URI().Path()
 			selectedFile := filepath.Base(selectedPath)
 
-			// Only allow .mp3 files from Resources/Sounds
+			// Only allow .mp3 files from assets/sounds
 			if filepath.Ext(selectedFile) == ".mp3" {
 				soundFile = selectedFile
 				soundFileLabel.SetText("Sound file: " + soundFile)
@@ -1359,11 +1321,11 @@ func showSettings(parent fyne.Window, myApp fyne.App) {
 		// Set filter for .mp3 files
 		fd.SetFilter(storage.NewExtensionFileFilter([]string{".mp3"}))
 
-		// Try to set location to Resources/Sounds
+		// Try to set location to assets/sounds
 		exePath, err := os.Executable()
 		if err == nil {
 			appDir := filepath.Dir(exePath)
-			soundsDir := filepath.Join(appDir, "Resources", "Sounds")
+			soundsDir := filepath.Join(appDir, "assets", "Sounds")
 
 			// Try to find the sounds directory from various locations
 			if _, err := os.Stat(soundsDir); err == nil {
@@ -1379,7 +1341,7 @@ func showSettings(parent fyne.Window, myApp fyne.App) {
 		// Also try current working directory
 		cwd, err := os.Getwd()
 		if err == nil {
-			soundsDir := filepath.Join(cwd, "Resources", "Sounds")
+			soundsDir := filepath.Join(cwd, "assets", "Sounds")
 			if _, err := os.Stat(soundsDir); err == nil {
 				uri, err := storage.Child(storage.NewFileURI(soundsDir), "")
 				if err == nil && uri != nil {
@@ -1428,7 +1390,6 @@ var (
 	updt           fyne.Window
 	kbimg          *canvas.Image
 	settingsWin    fyne.Window
-	themeWin       fyne.Window
 	soundEnabled   = true
 	soundFile      = "boing.mp3"
 	aboutWin       fyne.Window
@@ -1436,7 +1397,12 @@ var (
 	keywordsWinFor map[string]fyne.Window // Track which file each keywords window is for
 )
 
-func updateAlert(a fyne.App, updtmsg string) {
+// updateAlert shows the update-check result. When ahead is true (this build
+// is newer than the latest published release -- an unpublished/dev build), a
+// small HardHat badge appears beside the normal Hogwarts Sorting hat icon
+// rather than replacing it. Otherwise (current or an update is available)
+// just the Hogwarts Sorting hat icon is shown.
+func updateAlert(a fyne.App, updtmsg string, ahead bool) {
 	// Check if window already exists
 	if updt != nil {
 		updt.RequestFocus()
@@ -1458,21 +1424,19 @@ func updateAlert(a fyne.App, updtmsg string) {
 	myreleasenoteslink := widget.NewHyperlink("https://github.com/amarillier/KrankyBearTailer/blob/main/ReleaseNotes.txt", releasenoteslink)
 	myreleasenoteslink.Alignment = fyne.TextAlignLeading
 
-	if strings.Contains(updtmsg, "newer version") {
-		kbimg = canvas.NewImageFromResource(resourceKrankyBearHardHatPng)
-		kbimg.FillMode = canvas.ImageFillOriginal
-	} else if strings.Contains(updtmsg, "running the latest") {
-		kbimg = canvas.NewImageFromResource(resourceKrankyBearHogwartsSortingPng)
-		kbimg.FillMode = canvas.ImageFillOriginal
-	} else {
-		// For errors, just play a beep
-		playBeep("up")
-		kbimg = canvas.NewImageFromResource(resourceKrankyBearVikingHelmetPng)
-		kbimg.FillMode = canvas.ImageFillOriginal
+	kbimg = canvas.NewImageFromResource(resourceKrankyBearHogwartsSortingPng)
+	kbimg.FillMode = canvas.ImageFillOriginal
+
+	var iconDisplay fyne.CanvasObject = kbimg
+	if ahead {
+		badge := canvas.NewImageFromResource(resourceKrankyBearHardHatPng)
+		badge.FillMode = canvas.ImageFillContain
+		badge.SetMinSize(fyne.NewSize(60, 60))
+		iconDisplay = container.NewHBox(kbimg, badge)
 	}
 
 	text := widget.NewLabel(updtmsg)
-	content := container.NewVBox(kbimg, text, myreleaselink, myreleasenoteslink)
+	content := container.NewVBox(iconDisplay, text, myreleaselink, myreleasenoteslink)
 	updt = a.NewWindow(appName + ": Update Check")
 	_, month, _ := time.Now().Date()
 	if month == time.December {

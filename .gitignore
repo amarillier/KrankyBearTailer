@@ -20,24 +20,27 @@ test-*.log
 
 # git setup stuff
 git.sh
+git.txt
 
 # Update checker data
-latestcheck.json
+latestcheck*.json
 
 ## Build artifacts
 bin/.DS_Store
-Resources/.DS_Store
+assets/
 dist/
 build/
-KrankyBearTailer.app/
-vendor/*
-sync*.sh
-compile-all.sh
-compile-windows-ssh.sh
+*.bat
+*.ps1
+*.sh
 
-# ALLOWED
-!bin/*
-!installers/*
-!Resources/*
-!Inno/*
+rsrc_windows_amd64.syso
+kbtailer
+tailer
+
+# ALSO NOT ALLOWED
+bin/*
+installers/*
+assets/*
+Inno/*
 

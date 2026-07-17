@@ -1,17 +1,26 @@
-Release notes
+Version 0.2.0 - July 14, 2026
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Simplified theme switching: Dark/Light/System theme are now single-click
+  choices from the Settings menu and system tray, and the choice is saved
+  across restarts. Replaces the old "Theme Settings" window.
+- Added an in-app Help window (Help menu and system tray) covering opening
+  files, keyword highlighting, sound alerts, theming, and updates.
+- Update checker now shows a small hard-hat badge next to the app icon only
+  when you're running a newer, unreleased build than the latest published
+  release; a normal check or an available update just shows the usual icon.
+  Fixes a bug where an available update could incorrectly show as an error.
+- Reorganized bundled resources under assets/ (images, sounds) for
+  consistency across Kranky Bear apps.
+- Windows installer no longer bundles assets/images separately; those
+  images are compiled directly into the executable.
 
-Planned updates:
-0.NEXT
-- 
 
-
-Known issues:
-- 
-
-0.1.1
+Version 0.1.1 - November 7, 2025
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - minor updates, build mechanisms improved, installers, version bump
 
-0.1.0 
+Version 0.1.0 - November 6, 2025
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - initial checkin
 
 # "Now this is not the end. It is not even the beginning of the end. But it is, perhaps, the end of the beginning." Winston Churchill, November 10, 1942

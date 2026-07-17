@@ -2,10 +2,10 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "KrankyBearTailer"
-#define MyAppVersion "0.1.1"
+#define MyAppVersion "0.2.0"
 #define MyAppPublisher "Allan Marillier, 2024-2025"
 #define MyAppURL "https://github.com/amarillier/KrankyBearTailer"
-#define MyAppExeName "tailer-windows.exe"
+#define MyAppExeName "KrankyBearTailer.exe"
 #define MyAppAssocName MyAppName + ""
 #define MyAppAssocExt ".exe"
 #define MyAppAssocKey StringChange(MyAppAssocName, " ", "") + MyAppAssocExt
@@ -13,7 +13,7 @@
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-AppId={{4578B785-DB27-44FF-B3F9-2713B327BB90}
+AppId={{2F080A89-05D1-4C20-AE83-8BB76298A1AE}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 ;AppVerName={#MyAppName} {#MyAppVersion}
@@ -36,7 +36,7 @@ LicenseFile=..\LICENSE
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\installers
 OutputBaseFilename=KrankyBearTailerSetup_{#MyAppVersion}
-SetupIconFile=..\Resources\Images\KrankyBearHogwartsSorting.ico
+SetupIconFile=..\assets\images\KrankyBearHogwartsSorting.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -50,8 +50,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "startup"; Description: "Automatically start on login (or enable later via settings)"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "..\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\Resources\*"; DestDir: "{app}\Resources"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; assets\images is not installed: those images are go:embed-bundled into the exe at build time.
+Source: "..\assets\sounds\*"; DestDir: "{app}\assets\sounds"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 Source: "..\ReleaseNotes.txt"; DestDir: "{app}"; Flags: isreadme
 
